@@ -100,7 +100,7 @@ from dotenv import load_dotenv
 # 1. CONFIGURAÇÃO
 load_dotenv()
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": ["https://guia-ibira.web.app", "http://localhost:5500"]}}) 
+CORS(app, resources={r"/api/*": {"origins": ["https://guia-ibira.web.app", "http://127.0.0.1:5500"]}}) 
 
 # 2. CONEXÃO SUPABASE
 url: str = os.environ.get("SUPABASE_URL")
