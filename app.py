@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 # 1. CONFIGURAÇÃO
 load_dotenv()
 app = Flask(__name__)
-CORS(app) # Permite que o Front acesse o Back
+CORS(app, resources={r"/api/*": {"origins": ["https://guia-ibira.web.app", "http://localhost:5500"]}}) 
 
 # 2. CONEXÃO SUPABASE
 url: str = os.environ.get("SUPABASE_URL")
@@ -88,4 +88,5 @@ def buscar():
         return jsonify({"erro": str(e)}), 500
 
 if __name__ == '__main__':
+
     app.run(debug=True, port=5000)
