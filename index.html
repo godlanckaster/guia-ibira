@@ -1,0 +1,624 @@
+<!doctype html>
+<!-- 
+  GUIA IBIRÁ - V21.2 (STATUS BADGE FIX)
+  - Correção: Cards de Destaque NUNCA mostram status "Aberto/Fechado".
+  - Correção: Cards normais só mostram badge se houver horário válido (com números).
+  - Backend: Flask (app.py).
+-->
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Guia Ibirá — O Portal da Cidade</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { primary: '#0ea5a3', secondary: '#0f172a', dark: '#1f2937' } } }
+        }
+    </script>
+
+    <!-- Fontes e Ícones -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script type="module" src="https://unpkg.com/ionicons@7.4.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.4.0/dist/ionicons/ionicons.js"></script>
+
+    <style>
+        :root { --ibiria-azul: #0ea5a3; --ibiria-verde: #0f172a; }
+        html.dark { --ibiria-azul: #14b8a6; --ibiria-verde: #e2e8f0; }
+        body { font-family: 'Poppins', sans-serif; }
+        
+        /* Animações e Utilitários */
+        .skeleton {
+            background: linear-gradient(90deg, #f3f4f6 25%, #e9ecef 37%, #f3f4f6 63%);
+            background-size: 400% 100%; animation: shimmer 1.5s ease-in-out infinite; border-radius: .5rem;
+        }
+        html.dark .skeleton { background: linear-gradient(90deg, #1f2937 25%, #374151 37%, #1f2937 63%); }
+        @keyframes shimmer { 0% { background-position: 100% 0 } 100% { background-position: -100% 0 } }
+        
+        .card-item { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        
+        /* Imagens (Visual Original Preservado) */
+        .card-hover .data-img-wrapper { overflow: hidden; width: 100%; height: auto; min-height: 100px; position: relative; display: block; }
+        .card-hover .data-img { width: 100%; height: auto; display: block; object-fit: cover; transition: opacity 0.5s; }
+
+        /* Badges */
+        .status-badge {
+            position: absolute; top: 12px; right: 12px; padding: 4px 10px; border-radius: 20px;
+            font-size: 0.7rem; font-weight: 700; text-transform: uppercase; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 10; backdrop-filter: blur(4px);
+        }
+        .status-open { background-color: rgba(16, 185, 129, 0.9); color: white; }
+        .status-closed { background-color: rgba(239, 68, 68, 0.9); color: white; }
+
+        /* Modais */
+        .modal-backdrop { z-index: 50; transition: opacity 0.3s ease; backdrop-filter: blur(2px); }
+        .modal-content { z-index: 60; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); transform: scale(0.95); }
+        .modal-backdrop:not(.hidden) .modal-content { transform: scale(1); }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 antialiased">
+
+    <!-- SIDEBAR -->
+    <nav id="sidebar" class="fixed top-0 left-0 h-full w-72 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-2xl transform -translate-x-full transition-transform duration-300 z-40">
+        <div class="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-700">
+            <div class="text-xl font-bold text-[var(--ibiria-verde)] dark:text-gray-100 tracking-tight">Guia <span class="text-[var(--ibiria-azul)]">Ibirá</span></div>
+            <button id="sidebar-close-button" class="text-gray-400 hover:text-gray-800 transition-colors"><ion-icon name="close-outline" class="text-2xl"></ion-icon></button>
+        </div>
+        <div class="py-4 overflow-y-auto h-[calc(100%-140px)]">
+            <a href="#inicio" data-tab="inicio" class="sidebar-link flex items-center px-6 py-3.5 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all font-medium border-l-4 border-transparent hover:text-[var(--ibiria-azul)]"><ion-icon name="home-outline" class="text-xl mr-4"></ion-icon>Início</a>
+            <a href="#restaurantes" data-tab="restaurantes" class="sidebar-link flex items-center px-6 py-3.5 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all font-medium border-l-4 border-transparent hover:text-[var(--ibiria-azul)]"><ion-icon name="restaurant-outline" class="text-xl mr-4"></ion-icon>Gastronomia</a>
+            <a href="#hospedagem" data-tab="hospedagem" class="sidebar-link flex items-center px-6 py-3.5 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all font-medium border-l-4 border-transparent hover:text-[var(--ibiria-azul)]"><ion-icon name="bed-outline" class="text-xl mr-4"></ion-icon>Hospedagem</a>
+            <a href="#saude" data-tab="saude" class="sidebar-link flex items-center px-6 py-3.5 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all font-medium border-l-4 border-transparent hover:text-[var(--ibiria-azul)]"><ion-icon name="medkit-outline" class="text-xl mr-4"></ion-icon>Saúde</a>
+            <a href="#transporte" data-tab="transporte" class="sidebar-link flex items-center px-6 py-3.5 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all font-medium border-l-4 border-transparent hover:text-[var(--ibiria-azul)]"><ion-icon name="bus-outline" class="text-xl mr-4"></ion-icon>Transporte</a>
+            <a href="#turismo" data-tab="turismo" class="sidebar-link flex items-center px-6 py-3.5 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all font-medium border-l-4 border-transparent hover:text-[var(--ibiria-azul)]"><ion-icon name="map-outline" class="text-xl mr-4"></ion-icon>Turismo</a>
+            <a href="#comercio" data-tab="comercio" class="sidebar-link flex items-center px-6 py-3.5 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all font-medium border-l-4 border-transparent hover:text-[var(--ibiria-azul)]"><ion-icon name="build-outline" class="text-xl mr-4"></ion-icon>Serviços</a>
+            <a href="#servicos_publicos" data-tab="servicos_publicos" class="sidebar-link flex items-center px-6 py-3.5 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all font-medium border-l-4 border-transparent hover:text-[var(--ibiria-azul)]"><ion-icon name="shield-checkmark-outline" class="text-xl mr-4"></ion-icon>Serviços Públicos</a>
+        </div>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 absolute bottom-0 w-full bg-white dark:bg-gray-800">
+            <div class="relative">
+                <input id="main-search-input" placeholder="O que você procura?" class="w-full py-2.5 pl-10 pr-4 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--ibiria-azul)] text-sm transition-all" />
+                <div class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><ion-icon name="search-outline"></ion-icon></div>
+            </div>
+        </div>
+    </nav>
+    <div id="sidebar-overlay" class="fixed inset-0 bg-gray-900/50 hidden z-30 backdrop-blur-sm transition-opacity"></div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main-content" class="min-h-screen flex flex-col md:ml-0 transition-all">
+        <header class="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md shadow-sm sticky top-0 z-20 border-b border-gray-100 dark:border-gray-700">
+            <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <button id="sidebar-open-button" class="text-gray-600 hover:text-[var(--ibiria-azul)]"><ion-icon name="menu-outline" class="text-3xl"></ion-icon></button>
+                    <a href="#inicio" class="text-2xl font-bold text-[var(--ibiria-verde)] dark:text-gray-100 tracking-tight">Guia <span class="text-[var(--ibiria-azul)]">Ibirá</span></a>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="dark-toggle" class="text-gray-500 dark:text-gray-400 hover:text-[var(--ibiria-azul)] transition-all p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <ion-icon name="moon-outline" class="text-xl block transition-transform hover:rotate-12"></ion-icon>
+                        <ion-icon name="sunny-outline" class="text-xl hidden transition-transform hover:rotate-90"></ion-icon>
+                    </button>
+                    <button id="plantao-toggle" class="inline-flex items-center bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-full shadow-md transition-all transform hover:scale-105 text-sm font-medium">
+                        <ion-icon name="medkit-outline" class="mr-2 text-lg"></ion-icon><span>Plantão</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="container mx-auto px-4 py-8 flex-1">
+            <!-- INICIO -->
+            <section id="inicio" class="tab-panel" style="display:none;">
+                <div class="bg-white dark:bg-gray-800 rounded-3xl p-8 md:p-12 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row items-center gap-8 mb-12 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-[var(--ibiria-azul)] opacity-10 rounded-full blur-3xl"></div>
+                    <div class="flex-1 z-10">
+                        <h1 class="text-4xl md:text-6xl font-bold text-[var(--ibiria-verde)] dark:text-gray-100 leading-tight">Explore <span class="text-[var(--ibiria-azul)]">Ibirá</span></h1>
+                        <p class="mt-4 text-lg text-gray-600 dark:text-gray-300 max-w-xl">Termas, natureza e experiências locais.</p>
+                        <div class="mt-8 flex flex-wrap gap-3">
+                            <a href="#turismo" class="sidebar-link-click px-6 py-3 rounded-xl bg-[var(--ibiria-azul)] text-white font-semibold shadow-lg hover:bg-opacity-90 transition-all">Explorar Turismo</a>
+                            <a href="#restaurantes" class="sidebar-link-click px-6 py-3 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium">Gastronomia</a>
+                            <a href="#transporte" class="sidebar-link-click px-6 py-3 rounded-xl bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-all">Ver Ônibus</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold text-[var(--ibiria-verde)] dark:text-gray-100 flex items-center gap-2"><ion-icon name="sparkles-outline" class="text-[var(--ibiria-azul)]"></ion-icon> Destaques</h2>
+                </div>
+                <div id="destaques-grid" class="grid grid-cols-1 md:grid-cols-2 gap-8"></div>
+                <div id="destaques-loading" class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-8"></div>
+            </section>
+
+            <!-- CATEGORIAS -->
+            <section id="restaurantes" class="tab-panel" style="display:none">
+                <div class="mb-8"><h2 class="text-3xl font-bold text-[var(--ibiria-verde)] dark:text-gray-100">Gastronomia</h2><p class="text-gray-500 dark:text-gray-400 mt-1">Sabores imperdíveis.</p></div>
+                <div id="restaurantes-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+                <div id="restaurantes-loading" class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+            </section>
+            <!-- Outros (Hospedagem, Saude, etc...) - Estrutura repetida simplificada -->
+            <section id="hospedagem" class="tab-panel" style="display:none"><div class="mb-8"><h2 class="text-3xl font-bold dark:text-white">Hospedagem</h2></div><div id="hospedagem-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div><div id="hospedagem-loading" class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-8"></div></section>
+            <section id="saude" class="tab-panel" style="display:none"><div class="mb-8"><h2 class="text-3xl font-bold dark:text-white">Saúde</h2></div><div id="saude-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div><div id="saude-loading" class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-8"></div></section>
+            <section id="turismo" class="tab-panel" style="display:none"><div class="mb-8"><h2 class="text-3xl font-bold dark:text-white">Turismo</h2></div><div id="turismo-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div><div id="turismo-loading" class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-8"></div></section>
+            <section id="comercio" class="tab-panel" style="display:none"><div class="mb-8"><h2 class="text-3xl font-bold dark:text-white">Serviços</h2></div><div id="comercio-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div><div id="comercio-loading" class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-8"></div></section>
+            <section id="servicos_publicos" class="tab-panel" style="display:none"><div class="mb-8"><h2 class="text-3xl font-bold dark:text-white">Serviços Públicos</h2></div><div id="servicos_publicos-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div><div id="servicos_publicos-loading" class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-8"></div></section>
+            
+            <section id="transporte" class="tab-panel" style="display:none">
+                <div class="mb-8"><h2 class="text-3xl font-bold text-[var(--ibiria-verde)] dark:text-gray-100">Transporte</h2><p class="text-gray-500 mt-1">Horários e táxis.</p></div>
+                <!-- Horários Estáticos -->
+                <h3 class="text-2xl font-semibold text-[var(--ibiria-verde)] dark:text-gray-100 mb-6">Horários de Ônibus</h3><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"> <div class="rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"> <div class="bg-amber-500 text-white p-3 text-center font-bold">IBIRÁ &lt;&gt; SÃO JOSÉ DO RIO PRETO</div> <div class="p-4 space-y-3"> <div> <h4 class="font-semibold text-[var(--ibiria-verde)] dark:text-gray-100">IBIRÁ >> S.J. RIO PRETO</h4> <p class="text-sm"><strong>Seg a Sex:</strong> 05:50H (via Uchoa) - 06:40H - 16:45H - 17:30H</p> <p class="text-sm"><strong>Sábado:</strong> 06:40H - 08:00H (via Uchoa)</p> <p class="text-sm"><strong>Dom e Feriados:</strong> 17:10H (via Uchoa) - 17:30H</p> </div> <hr class="dark:border-gray-700"> <div> <h4 class="font-semibold text-[var(--ibiria-verde)] dark:text-gray-100">S.J. RIO PRETO >> IBIRÁ</h4> <p class="text-sm"><strong>Seg a Sex:</strong> 13:50H - 16:00 (via Uchoa) - 18:40H</p> <p class="text-sm"><strong>Sábado:</strong> 13:50H - 16:00 (via Uchoa)</p> <p class="text-sm"><strong>Dom e Feriados:</strong> 08:30H (via Uchoa) - 15:40H</p> </div> </div> </div> <div class="rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"> <div class="bg-blue-600 text-white p-3 text-center font-bold">IBIRÁ &lt;&gt; CATANDUVA</div> <div class="p-4 space-y-3"> <div> <h4 class="font-semibold text-[var(--ibiria-verde)] dark:text-gray-100">IBIRÁ >> CATANDUVA</h4> <p class="text-sm"><strong>Seg a Sáb:</strong> 07:10H</p> <p class="text-sm"><strong>Dom e Feriados:</strong> SEM OPERAÇÃO</p> </div> <hr class="dark:border-gray-700"> <div> <h4 class="font-semibold text-[var(--ibiria-verde)] dark:text-gray-100">CATANDUVA >> IBIRÁ</h4> <p class="text-sm"><strong>Seg a Sex:</strong> 16:30H</p> <p class="text-sm"><strong>Sábado:</strong> 14:00H</p> <p class="text-sm"><strong>Dom e Feriados:</strong> SEM OPERAÇÃO</p> </div> </div> </div> <div class="rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"> <div class="bg-green-600 text-white p-3 text-center font-bold">IBIRÁ &lt;&gt; TERMAS</div> <div class="p-4 space-y-3"> <div> <h4 class="font-semibold text-[var(--ibiria-verde)] dark:text-gray-100">IBIRÁ >> TERMAS</h4> <p class="text-sm"><strong>Seg a Dom:</strong> 06:10H - 07:10H - 13:00H - 15:50H - 21:30H</p> </div> <hr class="dark:border-gray-700"> <div> <h4 class="font-semibold text-[var(--ibiria-verde)] dark:text-gray-100">TERMAS >> IBIRÁ</h4> <p class="text-sm"><strong>Seg a Dom:</strong> 06:40H - 07:50H - 14:30H - 17:00H</p> </div> </div> </div> </div>
+                <h3 class="text-2xl font-semibold text-[var(--ibiria-verde)] dark:text-gray-100 mb-6">Táxis e Motoristas</h3>
+                <div id="transporte-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+                <div id="transporte-loading" class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+            </section>
+
+            <section id="search-results" class="tab-panel" style="display:none">
+                <div class="mb-8"><h2 id="search-results-title" class="text-3xl font-bold text-[var(--ibiria-verde)] dark:text-gray-100">Resultados da Busca</h2></div>
+                <div id="search-results-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+                <div id="search-results-loading" class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+            </section>
+        </main>
+
+        <footer class="bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 py-12 mt-20">
+            <div class="container mx-auto px-4 text-center">
+                <h4 class="text-xl font-bold text-[var(--ibiria-verde)] dark:text-gray-100 mb-2">Guia <span class="text-[var(--ibiria-azul)]">Ibirá</span></h4>
+                <div class="text-xs text-gray-400 mt-4">&copy; <span id="year"></span> Guia Ibirá.</div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- TEMPLATES (Card Normal) -->
+    <template id="card-template">
+        <div class="card-item bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md border border-gray-100 dark:border-gray-700 card-hover flex flex-col">
+            <div class="relative w-full bg-gray-50 dark:bg-gray-700/50 data-img-wrapper">
+                <div class="status-badge-container"></div>
+                <img class="data-img" src="https://placehold.co/800x600?text=Sem+Imagem" loading="lazy" />
+                <span class="data-badge absolute top-3 left-3 text-[10px] font-bold uppercase tracking-wider bg-[var(--ibiria-azul)] text-white px-2.5 py-1 rounded-full shadow-sm z-10">CATEGORIA</span>
+            </div>
+            <div class="p-5 flex flex-col flex-1">
+                <h3 class="data-title text-xl font-bold text-[var(--ibiria-verde)] dark:text-gray-100 mb-1 leading-tight"></h3>
+                <div class="rating-display flex items-center gap-2 mb-3 h-5">
+                    <div class="flex text-gray-300 text-sm rating-stars space-x-0.5"></div>
+                    <span class="text-xs text-gray-400 rating-text font-medium"></span>
+                </div>
+                <p class="data-desc text-sm text-gray-600 dark:text-gray-300 mb-6 line-clamp-3 leading-relaxed"></p>
+                <div class="mt-auto flex gap-3">
+                    <a class="data-map-btn flex-1 inline-flex justify-center items-center text-sm font-semibold border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-xl py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" href="#" target="_blank">Mapa</a>
+                    <button class="data-info-btn flex-1 inline-flex justify-center items-center text-sm font-semibold bg-[var(--ibiria-azul)] text-white rounded-xl py-2.5 hover:opacity-90 transition-all shadow-sm">Info</button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- TEMPLATE DESTAQUE (Layout Novo) -->
+    <template id="highlight-card-template">
+        <div class="card-item bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-md hover:shadow-xl border border-[var(--ibiria-azul)]/30 card-hover flex flex-col relative group">
+            <div class="absolute top-5 right-0 bg-amber-400 text-white text-xs font-bold px-3 py-1.5 rounded-l-lg z-20 flex items-center shadow-sm transform translate-x-2 group-hover:translate-x-0 transition-transform"><ion-icon name="star" class="text-sm mr-1"></ion-icon> DESTAQUE</div>
+            <div class="relative w-full bg-gray-50 dark:bg-gray-700/50 data-img-wrapper">
+                <!-- Sem gradiente escuro para arte limpa -->
+                <img class="data-img w-full h-auto object-cover" src="" />
+            </div>
+            <div class="p-6 flex flex-col flex-1 relative">
+                <h3 class="data-title text-2xl font-bold text-[var(--ibiria-verde)] dark:text-white mb-2 leading-tight"></h3>
+                <!-- Linha colorida abaixo do título -->
+                <div class="w-12 h-1.5 bg-[var(--ibiria-azul)] rounded-full mb-5"></div>
+                <!-- whitespace-pre-wrap: respeita os "Enter" na descrição -->
+                <div class="data-desc text-base text-gray-600 dark:text-gray-300 flex-1 whitespace-pre-wrap leading-relaxed"></div>
+            </div>
+        </div>
+    </template>
+
+    <!-- MODAL DETALHE -->
+    <div id="detail-modal" class="modal-backdrop fixed inset-0 bg-gray-900/80 hidden items-center justify-center p-4 z-50">
+        <div class="modal-content bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-5 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-0 z-10">
+                <h3 id="detail-title" class="text-xl font-bold text-[var(--ibiria-verde)] dark:text-gray-100 truncate"></h3>
+                <button id="detail-close" class="text-gray-400 hover:text-gray-800 dark:hover:text-white p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><ion-icon name="close-outline" class="text-2xl"></ion-icon></button>
+            </div>
+            <div class="p-0 overflow-y-auto custom-scrollbar flex-1">
+                <div class="flex flex-col md:flex-row">
+                    <!-- Imagem e Descrição Completa -->
+                    <div class="w-full md:w-2/3 p-6 md:p-8 border-b md:border-r border-gray-100 dark:border-gray-700">
+                        <div class="rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-700/50 mb-6 shadow-inner"><img id="detail-img" src="" class="w-full h-auto max-h-[500px] object-contain mx-auto" /></div>
+                        <p id="detail-desc" class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed text-base"></p>
+                        
+                        <!-- Avaliações -->
+                        <div class="mt-10 pt-8 border-t border-gray-100 dark:border-gray-700">
+                            <h4 class="text-lg font-bold text-[var(--ibiria-verde)] dark:text-gray-100 mb-6 flex items-center gap-2"><ion-icon name="chatbubbles-outline" class="text-[var(--ibiria-azul)]"></ion-icon> Avaliações</h4>
+                            <div id="modal-reviews-list" class="space-y-4 mb-8 max-h-80 overflow-y-auto pr-2 custom-scrollbar"></div>
+                            
+                            <div class="bg-gray-50 dark:bg-gray-700/30 p-6 rounded-2xl border border-gray-100 dark:border-gray-700/50">
+                                <h5 class="text-sm font-bold text-gray-900 dark:text-white mb-4 uppercase">Avalie este local</h5>
+                                <div class="flex gap-2 mb-4" id="modal-star-input">
+                                    <button type="button" data-val="1" class="star-btn text-2xl text-gray-300 hover:text-yellow-400 transform hover:scale-110 transition"><ion-icon name="star"></ion-icon></button>
+                                    <button type="button" data-val="2" class="star-btn text-2xl text-gray-300 hover:text-yellow-400 transform hover:scale-110 transition"><ion-icon name="star"></ion-icon></button>
+                                    <button type="button" data-val="3" class="star-btn text-2xl text-gray-300 hover:text-yellow-400 transform hover:scale-110 transition"><ion-icon name="star"></ion-icon></button>
+                                    <button type="button" data-val="4" class="star-btn text-2xl text-gray-300 hover:text-yellow-400 transform hover:scale-110 transition"><ion-icon name="star"></ion-icon></button>
+                                    <button type="button" data-val="5" class="star-btn text-2xl text-gray-300 hover:text-yellow-400 transform hover:scale-110 transition"><ion-icon name="star"></ion-icon></button>
+                                </div>
+                                <input type="hidden" id="modal-rating-value" value="0">
+                                <p id="star-error" class="text-red-500 text-xs hidden mb-3 animate-pulse">Selecione uma nota.</p>
+                                <input id="review-name" type="text" placeholder="Seu nome" class="w-full p-3 mb-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-[var(--ibiria-azul)] outline-none">
+                                <textarea id="review-comment" placeholder="Conte sua experiência..." class="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm resize-none focus:ring-2 focus:ring-[var(--ibiria-azul)] outline-none" rows="3"></textarea>
+                                <button id="btn-submit-review" class="mt-4 w-full bg-[var(--ibiria-azul)] text-white py-3 rounded-xl text-sm font-bold hover:opacity-90 flex justify-center items-center gap-2 shadow-md"><ion-icon name="send"></ion-icon> Enviar</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-full md:w-1/3 bg-gray-50 dark:bg-gray-800/50 p-6 md:p-8">
+                        <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Informações</h4>
+                        <div id="detail-contacts" class="space-y-4 text-sm text-gray-700 dark:text-gray-300 mb-8"></div>
+                        <div id="detail-hours-section" class="hidden mb-8">
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Horários</h4>
+                            <div id="detail-hours-table" class="text-sm text-gray-600 dark:text-gray-300 space-y-1.5 bg-white dark:bg-gray-700 p-4 rounded-xl border border-gray-100 dark:border-gray-600 shadow-sm"></div>
+                        </div>
+                        <a id="detail-map-link" href="#" target="_blank" class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border-2 border-[var(--ibiria-azul)] text-[var(--ibiria-azul)] font-bold hover:bg-[var(--ibiria-azul)] hover:text-white transition-all group"><ion-icon name="map" class="text-lg group-hover:scale-110"></ion-icon> Google Maps</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PLANTÃO -->
+    <div id="plantao-modal" class="modal-backdrop fixed inset-0 bg-gray-900/80 hidden items-center justify-center p-4 z-50">
+        <div class="modal-content bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative p-6 pt-8 text-center">
+            <div class="h-2 bg-red-500 w-full absolute top-0 left-0"></div>
+            <button id="plantao-modal-close" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors"><ion-icon name="close-outline" class="text-2xl"></ion-icon></button>
+            <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><ion-icon name="medkit" class="text-3xl"></ion-icon></div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-1">Farmácia de Plantão</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-6">Atendimento até as 21h</p>
+            <div id="plantao-modal-content" class="space-y-4 text-left bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700"></div>
+        </div>
+    </div>
+    
+    <div id="toast-wrap" class="fixed bottom-6 right-6 flex flex-col items-end space-y-2"></div>
+
+    <script>
+        // === CONFIGURAÇÃO BACKEND ===
+        const API_URL = 'https://guia-ibira.onrender.com/api';
+
+        // === UTILS ===
+        function toast(msg, type = 'success') {
+            const wrap = document.getElementById('toast-wrap');
+            const el = document.createElement('div');
+            el.className = `${type==='success'?'bg-green-600':'bg-red-600'} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 transform transition-all duration-300 translate-y-10 opacity-0`;
+            el.innerHTML = `<ion-icon name="${type==='success'?'checkmark-circle':'alert-circle'}" class="text-xl"></ion-icon><span class="font-medium text-sm">${msg}</span>`;
+            wrap.appendChild(el);
+            requestAnimationFrame(() => el.classList.remove('translate-y-10', 'opacity-0'));
+            setTimeout(() => { el.classList.add('opacity-0', 'translate-y-2'); setTimeout(() => el.remove(), 300); }, 3500);
+        }
+
+        function setSkeleton(containerId, count=6) {
+            const cont = document.getElementById(containerId);
+            if (!cont) return;
+            cont.innerHTML = Array.from({length:count}).map(() => `<div class="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-700"><div class="h-48 w-full skeleton"></div><div class="p-5"><div class="h-6 w-3/4 skeleton mb-3 rounded"></div><div class="h-4 w-1/2 skeleton mb-4 rounded"></div><div class="h-20 w-full skeleton rounded"></div></div></div>`).join('');
+        }
+
+        function debounce(fn, wait=350) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); }; }
+
+        // === LÓGICA DE DADOS ===
+        const tableConfig = {
+            'inicio': { isSpecial: true },
+            'destaques': { tableName: 'destaques' },
+            'restaurantes': { badge: 'Gastronomia', tableName: 'restaurantes' },
+            'hospedagem': { badge: 'Hospedagem', tableName: 'hospedagem' },
+            'saude': { badge: 'Saúde', tableName: 'saude' },
+            'transporte': { badge: 'Transporte', tableName: 'transporte', hasStatic: true },
+            'turismo': { badge: 'Turismo', tableName: 'turismo' },
+            'comercio': { badge: 'Serviço', tableName: 'comercio' },
+            'servicos_publicos': { badge: 'Público', tableName: 'servicos_publicos' },
+            'search-results': { isSpecial: true }
+        };
+
+        async function loadData(tableName, gridId, loadingId) {
+            const grid = document.getElementById(gridId);
+            const loading = document.getElementById(loadingId);
+            if (!grid || !loading) return;
+            setSkeleton(loadingId, 6); grid.innerHTML = '';
+
+            try {
+                const resItems = await fetch(`${API_URL}/items/${tableName}`);
+                if (!resItems.ok) throw new Error('Erro ao buscar itens');
+                const items = await resItems.json();
+
+                const resRatings = await fetch(`${API_URL}/avaliacoes/resumo/${tableName}`);
+                const ratings = resRatings.ok ? await resRatings.json() : [];
+
+                loading.innerHTML = '';
+                if (items.length === 0) {
+                    loading.innerHTML = '<div class="text-gray-500 italic col-span-full text-center py-8">Nenhum item encontrado.</div>';
+                    return;
+                }
+
+                const ratingsMap = {};
+                ratings.forEach(r => {
+                    if (!ratingsMap[r.item_id]) ratingsMap[r.item_id] = { sum: 0, count: 0 };
+                    ratingsMap[r.item_id].sum += r.nota;
+                    ratingsMap[r.item_id].count++;
+                });
+                Object.keys(ratingsMap).forEach(id => ratingsMap[id].avg = ratingsMap[id].sum / ratingsMap[id].count);
+
+                items.forEach(item => {
+                    let score = 0;
+                    if(item.imagem_url) score += 1000;
+                    if(item.horarios && Object.keys(item.horarios).length > 0) score += 500;
+                    if(ratingsMap[item.id]) score += (100 + ratingsMap[item.id].avg * 10 + ratingsMap[item.id].count);
+                    item._score = score;
+                });
+                items.sort((a, b) => b._score - a._score);
+
+                items.forEach(item => {
+                    const rData = ratingsMap[item.id] ? { avg: ratingsMap[item.id].avg, count: ratingsMap[item.id].count } : { avg: 0, count: 0 };
+                    grid.appendChild(createCard(item, tableConfig[tableName], rData));
+                });
+            } catch (err) {
+                console.error(err);
+                loading.innerHTML = '<div class="text-red-500 col-span-full text-center">Erro de conexão com servidor Python (localhost:5000).</div>';
+            }
+        }
+
+        // === MODAL REVIEWS ===
+        let currentDetailItem = null;
+        let currentDetailTable = null;
+
+        async function loadModalReviews(itemId, tableName) {
+            const list = document.getElementById('modal-reviews-list');
+            list.innerHTML = '<div class="flex justify-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--ibiria-azul)]"></div></div>';
+            try {
+                const res = await fetch(`${API_URL}/avaliacoes/detalhe/${tableName}/${itemId}`);
+                const data = await res.json();
+                list.innerHTML = '';
+                if(!data || data.length === 0) { list.innerHTML = '<div class="text-center py-6 text-gray-400 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-dashed border-gray-200 dark:border-gray-600"><p class="text-sm">Seja o primeiro a avaliar!</p></div>'; return; }
+                data.forEach(rev => {
+                    let stars = ''; for(let i=1; i<=5; i++) stars += `<ion-icon name="${i <= rev.nota ? 'star' : 'star-outline'}" class="text-yellow-400 text-xs"></ion-icon>`;
+                    const div = document.createElement('div');
+                    div.className = 'bg-white dark:bg-gray-700/30 p-4 rounded-xl border border-gray-100 dark:border-gray-700';
+                    div.innerHTML = `<div class="flex justify-between mb-2"><span class="font-bold text-sm dark:text-gray-200">${rev.nome_usuario || 'Anônimo'}</span><div class="flex bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded">${stars}</div></div><p class="text-xs text-gray-400 mb-2">${new Date(rev.created_at).toLocaleDateString('pt-BR')}</p><p class="text-sm text-gray-600 dark:text-gray-300">${rev.comentario || ''}</p>`;
+                    list.appendChild(div);
+                });
+            } catch (e) { list.innerHTML = '<p class="text-red-500 text-sm">Erro ao carregar avaliações.</p>'; }
+        }
+
+        async function handleReviewSubmit() {
+            if(!currentDetailItem) return;
+            const rating = parseInt(document.getElementById('modal-rating-value').value);
+            const name = document.getElementById('review-name').value.trim();
+            if(rating === 0) { document.getElementById('star-error').classList.remove('hidden'); return; }
+            if(!name) { toast('Nome obrigatório', 'error'); return; }
+            const btn = document.getElementById('btn-submit-review');
+            btn.disabled = true; btn.innerText = 'Enviando...';
+            try {
+                const payload = { item_id: currentDetailItem.id, tabela_item: currentDetailTable, nota: rating, nome_usuario: name, comentario: document.getElementById('review-comment').value.trim() };
+                const res = await fetch(`${API_URL}/avaliar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if(res.ok) {
+                    toast('Avaliação enviada!', 'success');
+                    document.getElementById('modal-rating-value').value = '0';
+                    document.getElementById('review-name').value = '';
+                    document.getElementById('review-comment').value = '';
+                    document.querySelectorAll('#modal-star-input .star-btn ion-icon').forEach(i => {i.name='star-outline'; i.classList.remove('text-yellow-400'); i.classList.add('text-gray-300');});
+                    loadModalReviews(currentDetailItem.id, currentDetailTable);
+                } else toast('Erro ao enviar', 'error');
+            } catch (e) { toast('Erro de conexão', 'error'); }
+            btn.disabled = false; btn.innerHTML = '<ion-icon name="send"></ion-icon> Enviar';
+        }
+
+        const debouncedSearch = debounce(async (term) => {
+            window.location.hash = 'search-results';
+            const grid = document.getElementById('search-results-grid');
+            const loading = document.getElementById('search-results-loading');
+            document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+            document.getElementById('search-results').style.display = 'block';
+            document.getElementById('search-results-title').textContent = `Resultados para "${term}"`;
+            setSkeleton('search-results-loading', 6); grid.innerHTML = '';
+            try {
+                const res = await fetch(`${API_URL}/busca?q=${encodeURIComponent(term)}`);
+                const data = await res.json();
+                loading.innerHTML = '';
+                if(!data || data.length === 0) { loading.innerHTML = '<div class="text-center py-8 w-full text-gray-500">Nada encontrado.</div>'; return; }
+                data.forEach(item => {
+                    const config = tableConfig[item.table_name];
+                    if(config) grid.appendChild(createCard(item, config, null));
+                });
+            } catch (e) { loading.innerHTML = '<div class="text-red-500">Erro na busca.</div>'; }
+        }, 400);
+
+        // === HELPERS ===
+        function createCard(item, config, ratingData) {
+            const tpl = document.getElementById('card-template');
+            const node = tpl.content.cloneNode(true).firstElementChild;
+            const img = node.querySelector('.data-img');
+            img.src = item.imagem_url || 'https://placehold.co/800x600?text=Sem+Imagem';
+            img.onerror = () => { img.src = 'https://placehold.co/800x600?text=Erro+Imagem'; };
+            node.querySelector('.data-title').textContent = item.nome;
+            node.querySelector('.data-desc').textContent = item.descricao;
+            node.querySelector('.data-badge').textContent = config.badge || 'INFO';
+            
+            // HORÁRIOS - Lógica Corrigida e Refinada
+            // Só exibe badge se houver horário E ele contiver números (evita exibir "Fechado" para textos genéricos)
+            if (item.horarios) {
+               const st = checkOpenStatus(item.horarios);
+               if(st) {
+                   const badge = document.createElement('div');
+                   badge.className = `status-badge ${st.isOpen ? 'status-open' : 'status-closed'}`;
+                   badge.textContent = st.text;
+                   node.querySelector('.status-badge-container').appendChild(badge);
+               }
+            }
+            
+            if (ratingData && ratingData.count > 0) {
+                let stars = ''; const rnd = Math.round(ratingData.avg);
+                for(let i=1;i<=5;i++) stars+=`<ion-icon name="star" class="${i<=rnd?'text-yellow-400':'text-gray-300'}"></ion-icon>`;
+                node.querySelector('.rating-stars').innerHTML = stars;
+                node.querySelector('.rating-text').textContent = `${ratingData.avg.toFixed(1)} (${ratingData.count})`;
+            } else {
+                node.querySelector('.rating-stars').innerHTML = `<ion-icon name="star" class="text-gray-300"></ion-icon>`.repeat(5);
+                node.querySelector('.rating-text').textContent = 'Sem avaliações';
+            }
+            const mapBtn = node.querySelector('.data-map-btn');
+            if(item.endereco) mapBtn.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.endereco)}, Ibirá, SP`;
+            else mapBtn.classList.add('hidden');
+            node.querySelector('.data-info-btn').addEventListener('click', () => openDetailModal(item, config));
+            return node;
+        }
+
+        function createHighlightCard(item) {
+            const tpl = document.getElementById('highlight-card-template');
+            const node = tpl.content.cloneNode(true).firstElementChild;
+            node.querySelector('.data-img').src = item.imagem_url || 'https://placehold.co/800x600?text=Destaque';
+            // Dados
+            node.querySelector('.data-title').textContent = item.nome;
+            node.querySelector('.data-desc').textContent = item.descricao; 
+            return node;
+        }
+
+        function openDetailModal(item, config) {
+            currentDetailItem = item; currentDetailTable = config.tableName;
+            document.getElementById('detail-title').textContent = item.nome;
+            document.getElementById('detail-desc').textContent = item.descricao || 'Sem descrição.';
+            document.getElementById('detail-img').src = item.imagem_url || 'https://placehold.co/800x600?text=Sem+Imagem';
+            const contacts = document.getElementById('detail-contacts'); contacts.innerHTML = '';
+            if(item.endereco) contacts.innerHTML += `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.endereco)}" target="_blank" class="flex items-center gap-3 hover:text-[var(--ibiria-azul)]"><ion-icon name="location-outline" class="text-lg text-[var(--ibiria-azul)]"></ion-icon> ${item.endereco}</a>`;
+            if(item.telefone) contacts.innerHTML += `<a href="tel:${item.telefone}" class="flex items-center gap-3 hover:text-[var(--ibiria-azul)]"><ion-icon name="call-outline" class="text-lg text-[var(--ibiria-azul)]"></ion-icon> ${item.telefone}</a>`;
+            if(item.whatsapp) contacts.innerHTML += `<a href="https://wa.me/55${item.whatsapp.replace(/\D/g,'')}" target="_blank" class="flex items-center gap-3 hover:text-[var(--ibiria-azul)]"><ion-icon name="logo-whatsapp" class="text-lg text-[var(--ibiria-azul)]"></ion-icon> ${item.whatsapp}</a>`;
+            const hSec = document.getElementById('detail-hours-section');
+            if(item.horarios && Object.keys(item.horarios).length > 0) {
+                hSec.classList.remove('hidden');
+                document.getElementById('detail-hours-table').innerHTML = generateHoursTable(item.horarios);
+            } else hSec.classList.add('hidden');
+            loadModalReviews(item.id, config.tableName);
+            document.getElementById('detail-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        const daysMap = {'seg':'Segunda','ter':'Terça','qua':'Quarta','qui':'Quinta','sex':'Sexta','sab':'Sábado','dom':'Domingo'};
+        const daysOrder = ['seg','ter','qua','qui','sex','sab','dom'];
+        
+        // === LÓGICA CORRIGIDA DE STATUS ===
+        function checkOpenStatus(h){ 
+            if(!h) return null; 
+            const now = new Date(); 
+            const day = ['dom','seg','ter','qua','qui','sex','sab'][now.getDay()];
+            const th = h[day];
+            
+            // CORREÇÃO FINAL: Só exibe se houver horário E números (ex: 08:00)
+            // Se estiver vazio ou for só texto ("Fechado", "Feriado"), retorna null -> sem badge.
+            if(!th || !/\d/.test(th)) return null;
+
+            const mins = now.getHours()*60 + now.getMinutes();
+            const parts = th.split(','); 
+            let isOpen = false;
+            let hasValidRange = false;
+
+            for(let p of parts){
+                let [s,e] = p.trim().split('-'); 
+                if(!s || !e) continue;
+                let [sh,sm] = s.split(':').map(Number); 
+                let [eh,em] = e.split(':').map(Number);
+                
+                if(isNaN(sh) || isNaN(eh)) continue;
+                hasValidRange = true; // Encontrou números válidos
+                
+                let start = sh*60 + sm; 
+                let end = eh*60 + em; 
+                if(end < start) end += 24*60;
+                if(mins >= start && mins <= end) isOpen = true;
+            }
+            
+            // Se não achou nenhum intervalo numérico válido, não exibe badge.
+            if (!hasValidRange) return null;
+
+            return {isOpen, text: isOpen ? 'Aberto Agora' : 'Fechado'};
+        }
+
+        function generateHoursTable(h){
+            if(!h) return ''; const now=new Date(); const today=['dom','seg','ter','qua','qui','sex','sab'][now.getDay()];
+            return daysOrder.map(d => {
+                const isToday=d===today;
+                return `<div class="flex justify-between ${isToday?'text-[var(--ibiria-azul)] font-bold':''}"><span>${daysMap[d]}</span><span>${h[d]||'Fechado'}</span></div>`;
+            }).join('');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const sidebar=document.getElementById('sidebar'); const overlay=document.getElementById('sidebar-overlay');
+            document.getElementById('sidebar-open-button').addEventListener('click', ()=> {sidebar.classList.remove('-translate-x-full'); overlay.classList.remove('hidden');});
+            const closeSidebar = ()=>{sidebar.classList.add('-translate-x-full'); overlay.classList.add('hidden');};
+            document.getElementById('sidebar-close-button').addEventListener('click', closeSidebar); overlay.addEventListener('click', closeSidebar);
+            document.querySelectorAll('.sidebar-link').forEach(l => l.addEventListener('click', closeSidebar));
+            document.querySelectorAll('.sidebar-link-click').forEach(l => l.addEventListener('click', closeSidebar));
+
+            const toggle = document.getElementById('dark-toggle');
+            const applyTheme = (dark) => { 
+                document.documentElement.classList.toggle('dark', dark);
+                toggle.querySelector('[name="moon-outline"]').classList.toggle('hidden', dark);
+                toggle.querySelector('[name="sunny-outline"]').classList.toggle('hidden', !dark);
+                localStorage.setItem('theme', dark?'dark':'light');
+            };
+            applyTheme(localStorage.getItem('theme')==='dark');
+            toggle.addEventListener('click', ()=> applyTheme(!document.documentElement.classList.contains('dark')));
+
+            const handleHash = () => {
+                const id = window.location.hash.substring(1) || 'inicio';
+                document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+                const t = document.getElementById(id); if(t) t.style.display='block';
+                document.querySelectorAll('.sidebar-link').forEach(l => {
+                    l.classList.remove('text-[var(--ibiria-azul)]','bg-gray-50','dark:bg-gray-700/50','border-[var(--ibiria-azul)]');
+                    if(l.dataset.tab===id) l.classList.add('text-[var(--ibiria-azul)]','bg-gray-50','dark:bg-gray-700/50','border-[var(--ibiria-azul)]');
+                });
+                if(id!=='inicio' && id!=='search-results' && tableConfig[id]) loadData(tableConfig[id].tableName, `${id}-grid`, `${id}-loading`);
+                if(id==='inicio') {
+                     const g=document.getElementById('destaques-grid'); const l=document.getElementById('destaques-loading');
+                     setSkeleton('destaques-loading',3); g.innerHTML='';
+                     fetch(`${API_URL}/items/destaques`).then(r=>r.json()).then(d=>{
+                         l.innerHTML=''; d.forEach(i=>g.appendChild(createHighlightCard(i)));
+                     }).catch(()=>l.innerHTML='<p class="text-red-500">Erro destaques</p>');
+                }
+            };
+            window.addEventListener('hashchange', handleHash); handleHash();
+
+            document.getElementById('main-search-input').addEventListener('input', (e) => {
+                if(e.target.value.length===0) window.location.hash='inicio';
+                else if(e.target.value.length>=2) debouncedSearch(e.target.value);
+            });
+
+            document.querySelectorAll('#modal-star-input .star-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const val=parseInt(btn.dataset.val); document.getElementById('modal-rating-value').value=val;
+                    document.querySelectorAll('#modal-star-input ion-icon').forEach((ico,i)=> {
+                        ico.name = i<val ? 'star' : 'star-outline';
+                        ico.classList.toggle('text-yellow-400', i<val);
+                        ico.classList.toggle('text-gray-300', i>=val);
+                    });
+                });
+            });
+            document.getElementById('btn-submit-review').addEventListener('click', handleReviewSubmit);
+
+            document.querySelectorAll('.modal-backdrop').forEach(m => {
+                const close = m.querySelector('button[id$="-close"]');
+                m.addEventListener('click', e => { if(e.target===m) { m.classList.add('hidden'); document.body.style.overflow=''; }});
+                if(close) close.addEventListener('click', () => { m.classList.add('hidden'); document.body.style.overflow=''; });
+            });
+            
+            const plantoes = [
+                { nome: 'Farma Center', telefone: '3551-1992', endereco: 'Av. Adriano Pinho Maia, 495', inicio: '2025-11-03', fim: '2025-11-09' },
+                { nome: 'Drogaria Total - Unidade Osvaldo Brighente', telefone: '3551-1073', endereco: 'Praça 9 de Julho, 791', inicio: '2025-11-24', fim: '2025-11-30' }
+            ];
+            const hoje = new Date().toISOString().split('T')[0];
+            const atual = plantoes.find(p => hoje >= p.inicio && hoje <= p.fim);
+            const pCont = document.getElementById('plantao-modal-content');
+            const pBtn = document.getElementById('plantao-toggle');
+            pCont.innerHTML = '';
+            if(atual) {
+                pBtn.disabled = false;
+                pCont.innerHTML = `<p class="font-bold">${atual.nome}</p><p>${atual.endereco}</p><a href="tel:${atual.telefone}" class="text-blue-500 font-bold block mt-2">Ligar: ${atual.telefone}</a>`;
+            } else {
+                 pBtn.disabled = false;
+                 pCont.innerHTML = '<p class="text-gray-500 italic">Consulte a escala local.</p>';
+            }
+            pBtn.addEventListener('click', () => document.getElementById('plantao-modal').classList.remove('hidden'));
+
+            document.getElementById('year').textContent = new Date().getFullYear();
+        });
+    </script>
+</body>
+</html>
